@@ -1,0 +1,100 @@
+
+name: World Cricket Universe - APK Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Download repository files
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Install Java 17
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 3. Setup Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+
+      # 4. Accept SDK licences
+      - name: Accept Android Licences
+        run: yes | sdkmanager --licenses || true
+
+      # 5. Install required Android packages
+      - name: Install Android SDK Packages
+        run: |
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-36"
+          sdkmanager "build-tools;36.0.0"
+
+      # 6. Setup Gradle
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      # 7. Extract uploaded cricket game ZIP
+      - name: Extract Cricket Game
+        run: |
+          ZIP_FILE=$(find . -maxdepth 3 -type f -name "World_Cricket_Universe_Mobile_Build.zip" -print -quit)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: Cricket game ZIP file not found!"
+            exit 1
+          fi
+
+          mkdir -p extracted
+          unzip -q "$ZIP_FILE" -d extracted
+
+      # 8. Find Android project
+      - name: Locate Android Project
+        run: |
+          PROJECT_FILE=$(find extracted -name settings.gradle.kts -print -quit)
+
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "ERROR: Android project not found!"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PROJECT_FILE")
+
+          if [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
+            echo "ERROR: App Gradle file not found!"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      # 9. Build APK
+      - name: Build World Cricket Universe APK
+        run: |
+          gradle --no-daemon \
+            -p "$PROJECT_DIR" \
+            :app:assembleDebug
+
+      # 10. Upload APK
+      - name: Upload Cricket Game APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: World-Cricket-Universe-APK
+          path: extracted/WorldCricketUniverse/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+          
